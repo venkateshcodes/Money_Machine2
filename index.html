@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>PayTM Receipt Studio | Master</title>
+    <!-- Tailwind CSS + Inter Font -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- html2canvas for screenshot -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- QR Code Generator -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap');
+        * {
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        /* Custom Zig-Zag torn edge effect */
+        .ticket-edge {
+            position: relative;
+        }
+        .ticket-edge::after {
+            content: '';
+            position: absolute;
+            bottom: -12px;
+            left: 0;
+            right: 0;
+            height: 12px;
+            background: radial-gradient(circle at 10px -5px, transparent 8px, white 9px);
+            background-size: 20px 20px;
+            background-repeat: repeat-x;
+            background-position: bottom;
+        }
+        .dark-theme .ticket-edge::after {
+            background: radial-gradient(circle at 10px -5px, transparent 8px, #1e1e2f 9px);
+            background-size: 20px 20px;
+            background-repeat: repeat-x;
+            background-position: bottom;
+        }
+        
+        /* Dashed divider */
+        .dashed-divider {
+            border-top: 1px dashed #ddd;
+        }
+        .dark-theme .dashed-divider {
+            border-top-color: #3d3d5c;
+        }
+        
+        /* History scrollbar */
+        .history-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .history-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .history-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+        .dark-theme .history-scroll::-webkit-scrollbar-track {
+            background: #2a2a3a;
+        }
+        .dark-theme .history-scroll::-webkit-scrollbar-thumb {
+            background: #4a4a6a;
+        }
+        
+        /* Copy button effect */
+        .copy-clipboard {
+            cursor: pointer;
+            transition: all 0.2s;
+            background: transparent;
+            border: none;
+            padding: 4px;
+            border-radius: 6px;
+        }
+        .copy-clipboard:active {
+            transform: scale(0.92);
+        }
+        .copy-clipboard:hover {
+            background: rgba(0, 186, 242, 0.1);
+        }
+        
+        /* Toast animation */
+        .toast-notification {
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        /* Dark Theme Global */
+        body.dark-theme {
+            background-color: #121212;
+        }
+        body.dark-theme .bg-white {
+            background-color: #1e1e2f !important;
+        }
+        body.dark-theme .bg-gray-50 {
+            background-color: #2a2a3a !important;
+        }
+        body.dark-theme .border-gray-100,
+        body.dark-theme .border-gray-200 {
+            border-color: #2d2d44 !important;
+        }
+        body.dark-theme .text-gray-600,
+        body.dark-theme .text-gray-500,
+        body.dark-theme .text-gray-400 {
+            color: #a0a0b5 !important;
+        }
+        body.dark-theme .text-gray-800,
+        body.dark-theme .text-gray-900 {
+            color: #e0e0e8 !important;
+        }
+        body.dark-theme .paytm-bg {
+            background-color: #1e2a4a !important;
+        }
+        body.dark-theme .shadow-md {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+        body.dark-theme .bg-gradient-to-r.from-blue-600.to-blue-500 {
+            background: linear-gradient(135deg, #1e4a7a, #0f5b8a) !important;
+        }
+        body.dark-theme .text-gray-700 {
+            color: #e5e7eb !important;
+        }
+        body.dark-theme .bg-blue-50 {
+            background-color: #1e2a4a !important;
+        }
+        
+        /* QR container center */
+        #qrcode img {
+            margin: 0 auto;
+            display: block;
+        }
+        #qrcode {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .success-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .paytm-bg {
+            background: #e6f7ff;
+        }
+
+        /* Animation */
+        @keyframes fadeInUp {
+            from {
+                opacity: 1;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-fadeInUp {
+            animation: fadeInUp 0.4s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4 md:p-8 font-sans transition-colors duration-300">
+
+    <div class="w-full max-w-7xl mx-auto grid lg:grid-cols-2 gap-8 items-start">
+        
+        <!-- LEFT: EDITOR STUDIO PANEL -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 sticky top-6 border border-gray-200 transition-colors duration-300">
+            <div class="flex items-center justify-between mb-6 border-b border-gray-100 pb-4">
+                <h2 class="text-xl font-bold bg-gradient-to-r from-[#002970] to-[#00baf2] bg-clip-text text-transparent">✏️ Receipt Studio</h2>
+                <div class="flex gap-2">
+                    <button id="themeToggleBtn" class="theme-toggle-btn bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm px-3 py-2 rounded-full flex items-center gap-1 shadow-sm transition">
+                        🌙 Dark
+                    </button>
+                </div>
+            </div>
+            
+            <div class="space-y-5">
+                <div>
+                    <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">💰 Amount (₹)</label>
+                    <input type="number" id="editAmount" value="500" step="10" min="0" class="mt-1 w-full border border-gray-200 rounded-xl px-4 py-2.5 text-lg font-bold focus:ring-2 focus:ring-[#00baf2] outline-none transition">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">📝 Amount in Words</label>
+                    <input type="text" id="editAmountWords" value="Rupees Five Hundred Only" class="mt-1 w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-[#00baf2] outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">👤 Receiver Name</label>
+                        <input type="text" id="editToName" value="Fire and Bubble" class="mt-1 w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-[#00baf2]">
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">🏦 Receiver Bank</label>
+                        <input type="text" id="editToBank" value="Paytm Payments Bank - 6915" class="mt-1 w-full border border-gray-200 rounded-xl px-4 py-2.5">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">👤 Sender Name</label>
+                        <input type="text" id="editFromName" value="Raj Manohar" class="mt-1 w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-[#00baf2]">
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">🏦 Sender Bank</label>
+                        <input type="text" id="editFromBank" value="State Bank of India - 6460" class="mt-1 w-full border border-gray-200 rounded-xl px-4 py-2.5">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">🔢 UPI Ref No</label>
+                        <input type="text" id="editUpiRef" value="441634252587" class="mt-1 w-full border border-gray-200 rounded-xl px-4 py-2.5 font-mono text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-gray-500 uppercase tracking-wide">📅 Date & Time</label>
+                        <input type="datetime-local" id="editDateTime" class="mt-1 w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:ring-2 focus:ring-[#00baf2] outline-none">
+                    </div>
+                </div>
+                
+                <div class="flex gap-3 pt-2">
+                    <button id="resetDefaultBtn" class="text-sm border border-gray-300 bg-gray-50 rounded-full px-5 py-2.5 hover:bg-gray-100 transition font-medium">↺ Reset</button>
+                    <button id="downloadImageBtn"
+                        style="background:#00baf2"
+                        class="text-sm hover:opacity-90 text-white rounded-full px-5 py-2.5 shadow-md transition flex items-center gap-2 font-medium">
+                        📸 Download as Image (HD)
+                    </button>
+                </div>
+                <p class="text-[11px] text-gray-400 text-center pt-2">✨ Edit any field → Real-time preview updates instantly | Pure export (No Fade, No Outline)</p>
+            </div>
+            
+            <!-- Quick Actions & QR Toggle -->
+            <div class="mt-6 pt-4 border-t border-gray-200">
+                <button id="toggleQrBtn" class="text-sm text-[#00baf2] hover:text-[#002970] transition flex items-center gap-2 font-medium">
+                    🔲 Generate/Show QR Code for UPI
+                </button>
+            </div>
+            
+            <!-- History Section -->
+            <div class="mt-5 pt-3 border-t border-gray-200">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-bold text-gray-700 flex items-center gap-2 text-sm">
+                        📜 Transaction History
+                        <span class="text-xs bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-full" id="historyCount">0</span>
+                    </h3>
+                    <button id="clearHistoryBtn" class="text-xs text-red-500 hover:text-red-700 transition underline-offset-2 underline">Clear All</button>
+                </div>
+                <div id="historyListContainer" class="history-scroll space-y-2 pr-1 max-h-56 overflow-y-auto">
+                    <div id="emptyHistoryMsg" class="text-center text-gray-400 text-xs py-5 italic">No saved receipts. Click "Save to History" below</div>
+                </div>
+                <button id="saveToHistoryBtn" class="mt-3 w-full text-sm border border-gray-300 bg-gray-50 rounded-xl px-4 py-2.5 hover:bg-gray-100 transition font-medium flex items-center justify-center gap-2">
+                    💾 Save Current Receipt to History
+                </button>
+            </div>
+        </div>
+        
+        <!-- RIGHT: PAYTM PAYMENT SUCCESS CARD (receipt preview) -->
+        <div id="receiptCapture" class="transition-all duration-300">
+            <div class="max-w-[480px] mx-auto animate-fadeInUp" id="receiptRootCapture">
+                <!-- MAIN CARD - This is the exact element we export (full bleed) -->
+                <div class="bg-white rounded-3xl shadow-md overflow-hidden border border-gray-100 transition-colors duration-300">
+                    
+                    <!-- Header: paytm logo -->
+                    <div class="px-6 pt-6 pb-2">
+                        <div class="flex justify-center items-center">
+                            <span class="text-2xl font-extrabold text-[#002970]">pay</span>
+                            <span class="text-2xl font-extrabold text-[#00baf2]">tm</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Payment Status Card -->
+                    <div class="paytm-bg mx-4 rounded-2xl py-6 px-4 text-center relative overflow-hidden">
+                        <div class="relative z-10">
+                            <div 
+                                class="success-badge inline-flex items-center justify-center w-14 h-14 rounded-full mb-3 shadow-md"
+                                style="background:#b7f5d4">
+                                <svg class="w-8 h-8 text-green-800" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                            </div>
+                            <h1 class="text-xl font-bold text-gray-800">Payment Successful</h1>
+                            <div class="mt-3">
+                                <!-- FIXED: Proper vertical spacing between amount and amount words -->
+                                <div class="flex flex-col items-center justify-center">
+                                    <!-- Amount Row -->
+                                    <div class="flex items-baseline gap-1">
+                                        <span class="text-3xl font-bold text-gray-900 dark:text-gray-100">₹</span>
+                                        <span class="text-5xl font-extrabold text-gray-900 dark:text-white leading-none" id="displayAmount">500</span>
+                                    </div>
+                                    <!-- Space Control - Consistent gap that works in both themes -->
+                                    <div class="h-2"></div>
+                                    <!-- Amount Words -->
+                                    <p class="text-sm text-gray-500 dark:text-gray-300 font-medium text-center leading-tight" id="displayAmountWords">
+                                        Rupees Five Hundred Only
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="absolute bottom-0 left-0 right-0 h-2">
+                            <div class="h-1 bg-[#00baf2]"></div>
+                            <div class="h-1 bg-[#002970]"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Receipt Card -->
+                    <div class="ticket-edge relative bg-white mx-4 mt-5 rounded-2xl shadow-md border border-gray-100 mb-6 overflow-hidden">
+                        <div class="p-5">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">To</p>
+                                    <p class="font-bold text-gray-800 text-base" id="displayToName">Fire and Bubble</p>
+                                    <p class="text-xs text-gray-500 mt-0.5" id="displayToBank">Paytm Payments Bank - 6915</p>
+                                </div>
+                                <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                    <svg class="w-4 h-4 text-[#00baf2]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <rect x="2" y="4" width="20" height="16" rx="2" stroke-width="1.5"/>
+                                        <path d="M8 12h8" stroke-width="1.5"/>
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            <div class="dashed-divider my-4"></div>
+                            
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="text-xs text-gray-400 uppercase tracking-wide mb-1">From</p>
+                                    <p class="font-bold text-gray-800 text-base" id="displayFromName">Raj Manohar</p>
+                                    <p class="text-xs text-gray-500 mt-0.5" id="displayFromBank">State Bank of India - 6460</p>
+                                </div>
+                                <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                                    <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path d="M3 10h18M6 14h4M14 14h4" stroke-width="1.5"/>
+                                        <rect x="2" y="4" width="20" height="16" rx="2" stroke-width="1.5"/>
+                                    </svg>
+                                </div>
+                            </div>
+                            
+                            <div class="dashed-divider my-4"></div>
+                            
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-gray-400 uppercase tracking-wide">UPI Ref No</span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-mono text-gray-700" id="displayUpiRef">441634252587</span>
+                                        <button class="copy-clipboard copy-btn" data-copy-field="upiRef" aria-label="Copy UPI Ref">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-xs text-gray-400 uppercase tracking-wide">Date & Time</span>
+                                    <span class="text-sm text-gray-700" id="displayDateTime">19 Feb 2024, 07:16 PM</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- QR Code Section -->
+                    <div id="qrSection" class="mx-4 mb-4 hidden">
+                        <div class="bg-gray-50 rounded-xl p-4 text-center">
+                            <div id="qrcode" class="flex justify-center"></div>
+                            <p class="text-xs text-gray-500 mt-2">Scan to pay</p>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center px-6 pb-6">
+                        <p class="text-[10px] text-gray-400 uppercase tracking-wide">Powered by</p>
+                        <div class="flex justify-center items-center gap-1.5 mt-1">
+                            <span class="text-xs font-semibold text-[#002970]">UPI</span>
+                            <span class="text-xs text-gray-400">|</span>
+                            <span class="text-xs font-semibold text-[#00baf2]">Paytm Payments Bank</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ---------- UTILITIES ----------
+        const sanitizeText = (str) => {
+            if (!str) return '';
+            return String(str).replace(/[&<>]/g, function(m) {
+                if (m === '&') return '&amp;';
+                if (m === '<') return '&lt;';
+                if (m === '>') return '&gt;';
+                return m;
+            }).trim();
+        };
+
+        const numberToWords = (num) => {
+            if (num === undefined || num === null || isNaN(num)) return 'Zero';
+            const n = Math.floor(parseFloat(num));
+            if (n === 0) return 'Zero';
+            const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+            const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+            const convert = (val) => {
+                if (val === 0) return '';
+                if (val < 20) return ones[val] + ' ';
+                return tens[Math.floor(val / 10)] + (val % 10 !== 0 ? ' ' + ones[val % 10] : '') + ' ';
+            };
+            let rupees = n;
+            let result = '';
+            if (rupees >= 10000000) { result += convert(Math.floor(rupees / 10000000)) + 'Crore '; rupees %= 10000000; }
+            if (rupees >= 100000) { result += convert(Math.floor(rupees / 100000)) + 'Lakh '; rupees %= 100000; }
+            if (rupees >= 1000) { result += convert(Math.floor(rupees / 1000)) + 'Thousand '; rupees %= 1000; }
+            if (rupees >= 100) { result += convert(Math.floor(rupees / 100)) + 'Hundred '; rupees %= 100; }
+            if (rupees > 0) { result += convert(rupees); }
+            return result.trim() + ' Rupees Only';
+        };
+
+        // Format datetime-local to readable string
+        const formatDateTime = (datetimeLocalValue) => {
+            if (!datetimeLocalValue) return '19 Feb 2024, 07:16 PM';
+            const date = new Date(datetimeLocalValue);
+            if (isNaN(date.getTime())) return '19 Feb 2024, 07:16 PM';
+            return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) + ', ' +
+                   date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        };
+
+        // ---------- STATE MANAGEMENT ----------
+        const AppState = {
+            data: {
+                amount: 500,
+                amountWords: 'Rupees Five Hundred Only',
+                toName: 'Fire and Bubble',
+                toBank: 'Paytm Payments Bank - 6915',
+                fromName: 'Raj Manohar',
+                fromBank: 'State Bank of India - 6460',
+                upiRef: '441634252587',
+                dateTimeRaw: '',
+                dateTimeDisplay: '19 Feb 2024, 07:16 PM'
+            },
+            qrVisible: false,
+            qrInstance: null,
+            history: [],
+            debounceTimer: null
+        };
+
+        // DOM Elements
+        const elements = {
+            displayAmount: document.getElementById('displayAmount'),
+            displayAmountWords: document.getElementById('displayAmountWords'),
+            displayToName: document.getElementById('displayToName'),
+            displayToBank: document.getElementById('displayToBank'),
+            displayFromName: document.getElementById('displayFromName'),
+            displayFromBank: document.getElementById('displayFromBank'),
+            displayUpiRef: document.getElementById('displayUpiRef'),
+            displayDateTime: document.getElementById('displayDateTime'),
+            editAmount: document.getElementById('editAmount'),
+            editAmountWords: document.getElementById('editAmountWords'),
+            editToName: document.getElementById('editToName'),
+            editToBank: document.getElementById('editToBank'),
+            editFromName: document.getElementById('editFromName'),
+            editFromBank: document.getElementById('editFromBank'),
+            editUpiRef: document.getElementById('editUpiRef'),
+            editDateTime: document.getElementById('editDateTime'),
+            qrSection: document.getElementById('qrSection'),
+            qrcodeContainer: document.getElementById('qrcode'),
+            historyContainer: document.getElementById('historyListContainer'),
+            emptyHistoryMsg: document.getElementById('emptyHistoryMsg'),
+            historyCount: document.getElementById('historyCount')
+        };
+
+        // Helper: Update UI from state
+        function updateUI() {
+            const d = AppState.data;
+            elements.displayAmount.innerText = d.amount;
+            elements.displayAmountWords.innerText = sanitizeText(d.amountWords);
+            elements.displayToName.innerText = sanitizeText(d.toName);
+            elements.displayToBank.innerText = sanitizeText(d.toBank);
+            elements.displayFromName.innerText = sanitizeText(d.fromName);
+            elements.displayFromBank.innerText = sanitizeText(d.fromBank);
+            elements.displayUpiRef.innerText = sanitizeText(d.upiRef);
+            elements.displayDateTime.innerText = d.dateTimeDisplay;
+            
+            // Sync inputs with state
+            if (parseFloat(elements.editAmount.value) !== d.amount) elements.editAmount.value = d.amount;
+            if (elements.editAmountWords.value !== d.amountWords) elements.editAmountWords.value = d.amountWords;
+            if (elements.editToName.value !== d.toName) elements.editToName.value = d.toName;
+            if (elements.editToBank.value !== d.toBank) elements.editToBank.value = d.toBank;
+            if (elements.editFromName.value !== d.fromName) elements.editFromName.value = d.fromName;
+            if (elements.editFromBank.value !== d.fromBank) elements.editFromBank.value = d.fromBank;
+            if (elements.editUpiRef.value !== d.upiRef) elements.editUpiRef.value = d.upiRef;
+            
+            if (AppState.qrVisible) generateQRCode();
+        }
+
+        // Auto-generate amount words
+        function autoGenerateAmountWords(amountVal) {
+            const words = numberToWords(amountVal);
+            AppState.data.amountWords = words;
+            elements.editAmountWords.value = words;
+            updateUI();
+        }
+
+        // Debounced update from inputs
+        function handleInputChange() {
+            if (AppState.debounceTimer) clearTimeout(AppState.debounceTimer);
+            AppState.debounceTimer = setTimeout(() => {
+                let amountVal = parseFloat(elements.editAmount.value);
+                if (isNaN(amountVal) || amountVal < 0) amountVal = 0;
+                elements.editAmount.value = amountVal;
+                
+                const amountWordsManual = elements.editAmountWords.value.trim();
+                AppState.data.amount = amountVal;
+                if (!amountWordsManual || amountWordsManual === AppState.data.amountWords) {
+                    autoGenerateAmountWords(amountVal);
+                } else {
+                    AppState.data.amountWords = amountWordsManual;
+                }
+                
+                AppState.data.toName = sanitizeText(elements.editToName.value) || 'Fire and Bubble';
+                AppState.data.toBank = sanitizeText(elements.editToBank.value) || 'Paytm Payments Bank - 6915';
+                AppState.data.fromName = sanitizeText(elements.editFromName.value) || 'Raj Manohar';
+                AppState.data.fromBank = sanitizeText(elements.editFromBank.value) || 'State Bank of India - 6460';
+                AppState.data.upiRef = sanitizeText(elements.editUpiRef.value) || '441634252587';
+                
+                const rawDateTime = elements.editDateTime.value;
+                AppState.data.dateTimeRaw = rawDateTime;
+                AppState.data.dateTimeDisplay = formatDateTime(rawDateTime);
+                
+                updateUI();
+            }, 50);
+        }
+
+        // QR Code with memory cleanup
+        function generateQRCode() {
+            if (!elements.qrcodeContainer) return;
+            if (AppState.qrInstance && typeof AppState.qrInstance.clear === 'function') {
+                AppState.qrInstance.clear();
+            }
+            elements.qrcodeContainer.innerHTML = '';
+            const receiverName = AppState.data.toName.replace(/\s/g, '') || 'GeetaRani';
+            const receiverVPA = receiverName + '@paytm';
+            const amount = AppState.data.amount;
+            const upiData = `upi://pay?pa=${encodeURIComponent(receiverVPA)}&pn=${encodeURIComponent(AppState.data.toName)}&am=${amount}&cu=INR&tn=Payment`;
+            try {
+                if (typeof QRCode !== 'undefined') {
+                    AppState.qrInstance = new QRCode(elements.qrcodeContainer, {
+                        text: upiData,
+                        width: 128,
+                        height: 128,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.M
+                    });
+                }
+            } catch (err) {
+                console.warn("QR Error");
+                elements.qrcodeContainer.innerHTML = '<div class="text-xs text-gray-400">QR Code unavailable</div>';
+            }
+        }
+
+        // Toggle QR
+        const toggleQrBtn = document.getElementById('toggleQrBtn');
+        toggleQrBtn.addEventListener('click', () => {
+            AppState.qrVisible = !AppState.qrVisible;
+            if (AppState.qrVisible) {
+                elements.qrSection.classList.remove('hidden');
+                generateQRCode();
+                toggleQrBtn.innerHTML = '🔲 Hide QR Code';
+            } else {
+                elements.qrSection.classList.add('hidden');
+                toggleQrBtn.innerHTML = '🔲 Generate/Show QR Code for UPI';
+            }
+        });
+
+        // Reset default
+        function resetToDefault() {
+            const defaultDate = '2024-02-19T19:16';
+            elements.editAmount.value = '500';
+            elements.editAmountWords.value = 'Rupees Five Hundred Only';
+            elements.editToName.value = 'Fire and Bubble';
+            elements.editToBank.value = 'Paytm Payments Bank - 6915';
+            elements.editFromName.value = 'Raj Manohar';
+            elements.editFromBank.value = 'State Bank of India - 6460';
+            elements.editUpiRef.value = '441634252587';
+            elements.editDateTime.value = defaultDate;
+            handleInputChange();
+            showToast('↺ Reset to default', 'success');
+        }
+
+        // ---------- EXPORT: FULL BLEED, NO OUTLINE, NO SHADOW ----------
+        const downloadBtn = document.getElementById('downloadImageBtn');
+        
+        async function downloadImage() {
+            const btn = downloadBtn;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '⏳ Rendering HD...';
+            btn.disabled = true;
+            
+            try {
+                // Target ONLY the inner card - skip the outer wrapper
+                const receiptCard = document.querySelector('#receiptRootCapture > div');
+                if (!receiptCard) throw new Error("Receipt card element not found");
+                
+                // Create offscreen container with NO padding
+                const offscreenDiv = document.createElement('div');
+                offscreenDiv.style.position = 'fixed';
+                offscreenDiv.style.top = '-10000px';
+                offscreenDiv.style.left = '-10000px';
+                offscreenDiv.style.backgroundColor = '#ffffff';
+                offscreenDiv.style.padding = '0';
+                offscreenDiv.style.margin = '0';
+                offscreenDiv.style.zIndex = '-9999';
+                
+                // Deep clone the card
+                const cloneCard = receiptCard.cloneNode(true);
+                
+                // REMOVE all outer styling that could cause outline/fade
+                cloneCard.style.boxShadow = 'none';
+                cloneCard.style.border = 'none';
+                cloneCard.style.borderRadius = '0px';
+                cloneCard.style.margin = '0';
+                cloneCard.style.padding = '0';
+                cloneCard.style.width = '480px';
+                cloneCard.style.maxWidth = '480px';
+                cloneCard.style.display = 'block';
+                
+                // Force all internal elements to have no opacity issues
+                const allNodes = cloneCard.querySelectorAll('*');
+                allNodes.forEach(el => {
+                    el.style.opacity = '1';
+                    el.style.filter = 'none';
+                    el.style.backdropFilter = 'none';
+                    el.style.transform = 'translate3d(0,0,0)';
+                });
+                
+                // Ensure consistent background colors for export
+                cloneCard.querySelectorAll('.bg-white').forEach(el => el.style.backgroundColor = '#ffffff');
+                cloneCard.querySelectorAll('.paytm-bg').forEach(el => el.style.backgroundColor = '#e6f7ff');
+                cloneCard.querySelectorAll('.ticket-edge').forEach(el => el.style.backgroundColor = '#ffffff');
+                cloneCard.querySelectorAll('.text-gray-800, .text-gray-900').forEach(el => el.style.color = '#1f2937');
+                cloneCard.querySelectorAll('.text-gray-500, .text-gray-400').forEach(el => el.style.color = '#6b7280');
+                
+                const amountSpan = cloneCard.querySelector('#displayAmount');
+                if (amountSpan) amountSpan.style.color = '#111827';
+                
+                // Remove any remaining shadows from inner elements
+                cloneCard.querySelectorAll('.shadow-md, .shadow-sm, .shadow').forEach(el => {
+                    el.style.boxShadow = 'none';
+                });
+                
+                offscreenDiv.appendChild(cloneCard);
+                document.body.appendChild(offscreenDiv);
+                
+                // Wait for reflow
+                await new Promise(r => setTimeout(r, 80));
+                
+                // Capture ONLY the cloneCard (not the offscreen wrapper)
+                const canvas = await html2canvas(cloneCard, {
+                    scale: 2.5,
+                    backgroundColor: '#ffffff',
+                    useCORS: true,
+                    logging: false,
+                    allowTaint: false,
+                    imageTimeout: 0,
+                    windowWidth: cloneCard.scrollWidth,
+                    windowHeight: cloneCard.scrollHeight
+                });
+                
+                // Cleanup
+                document.body.removeChild(offscreenDiv);
+                
+                // Download
+                const link = document.createElement('a');
+                link.download = `paytm_receipt_${Date.now()}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                
+                showToast('✅ HD Receipt Downloaded (No Border, Full Bleed)', 'success');
+            } catch (err) {
+                console.error("Export error:", err);
+                showToast('❌ Download failed, retry', 'error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        downloadBtn.addEventListener('click', downloadImage);
+
+        // ---------- HISTORY SYSTEM (with size limit) ----------
+        const HISTORY_KEY = 'paytmStudioHistory';
+        const MAX_HISTORY = 20;
+
+        function loadHistory() {
+            const stored = localStorage.getItem(HISTORY_KEY);
+            if (stored) {
+                try {
+                    AppState.history = JSON.parse(stored);
+                    if (!Array.isArray(AppState.history)) AppState.history = [];
+                } catch(e) { AppState.history = []; }
+            } else { AppState.history = []; }
+            renderHistory();
+        }
+        
+        function saveHistory() {
+            if (AppState.history.length > MAX_HISTORY) AppState.history = AppState.history.slice(-MAX_HISTORY);
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(AppState.history));
+            renderHistory();
+        }
+        
+        function renderHistory() {
+            const container = elements.historyContainer;
+            const oldItems = container.querySelectorAll('.history-item-dynamic');
+            oldItems.forEach(item => item.remove());
+            if (AppState.history.length === 0) {
+                elements.emptyHistoryMsg.style.display = 'block';
+                elements.historyCount.innerText = '0';
+                return;
+            }
+            elements.emptyHistoryMsg.style.display = 'none';
+            elements.historyCount.innerText = AppState.history.length;
+            const sorted = [...AppState.history].reverse();
+            sorted.forEach(record => {
+                const div = document.createElement('div');
+                div.className = 'history-item-dynamic bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-3 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition';
+                div.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div class="flex-1">
+                            <div class="text-xs font-mono text-gray-500">📅 ${sanitizeText(record.dateTimeDisplay)}</div>
+                            <p class="font-semibold text-sm mt-1">${sanitizeText(record.toName)}</p>
+                            <div class="flex items-baseline gap-1 mt-0.5">
+                                <span class="text-sm font-bold text-green-600">₹${sanitizeText(record.amount)}</span>
+                                <span class="text-[10px] text-gray-400">${sanitizeText(record.fromName)}</span>
+                            </div>
+                        </div>
+                        <button class="load-history-item bg-[#00baf2]/10 hover:bg-[#00baf2]/20 text-[#00baf2] text-xs px-3 py-1.5 rounded-full transition" data-id="${record.id}">↻ Load</button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            document.querySelectorAll('.load-history-item').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const id = btn.getAttribute('data-id');
+                    const record = AppState.history.find(r => r.id == id);
+                    if (record) {
+                        elements.editAmount.value = record.amount;
+                        elements.editAmountWords.value = record.amountWords;
+                        elements.editToName.value = record.toName;
+                        elements.editToBank.value = record.toBank;
+                        elements.editFromName.value = record.fromName;
+                        elements.editFromBank.value = record.fromBank;
+                        elements.editUpiRef.value = record.upiRef;
+                        elements.editDateTime.value = record.dateTimeRaw || '';
+                        handleInputChange();
+                        showToast(`📜 Loaded: ${record.toName}`, 'success');
+                    }
+                });
+            });
+        }
+        
+        function saveCurrentToHistory() {
+            const record = {
+                id: crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).substring(2),
+                amount: AppState.data.amount,
+                amountWords: AppState.data.amountWords,
+                toName: AppState.data.toName,
+                toBank: AppState.data.toBank,
+                fromName: AppState.data.fromName,
+                fromBank: AppState.data.fromBank,
+                upiRef: AppState.data.upiRef,
+                dateTimeRaw: AppState.data.dateTimeRaw,
+                dateTimeDisplay: AppState.data.dateTimeDisplay
+            };
+            AppState.history.push(record);
+            saveHistory();
+            showToast('💾 Receipt saved to history!', 'success');
+        }
+        
+        function clearHistory() {
+            if (confirm('⚠️ Delete ALL saved receipts?')) {
+                AppState.history = [];
+                saveHistory();
+                showToast('🗑️ History cleared', 'success');
+            }
+        }
+
+        // Toast
+        let activeToast = null;
+        function showToast(msg, type) {
+            if (activeToast && activeToast.remove) activeToast.remove();
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-5 right-5 z-50 ${type === 'success' ? 'bg-green-600' : 'bg-red-600'} text-white text-sm px-4 py-2.5 rounded-xl shadow-md toast-notification flex items-center gap-2`;
+            toast.innerHTML = `<span>${sanitizeText(msg)}</span>`;
+            document.body.appendChild(toast);
+            activeToast = toast;
+            setTimeout(() => { if(toast.remove) toast.remove(); if(activeToast === toast) activeToast = null; }, 2500);
+        }
+
+        // Copy UPI Ref
+        document.body.addEventListener('click', (e) => {
+            const copyBtn = e.target.closest('.copy-clipboard');
+            if (!copyBtn) return;
+            const textToCopy = elements.displayUpiRef.innerText;
+            if (textToCopy) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    showToast('Copied UPI Ref', 'success');
+                }).catch(() => showToast('Copy failed', 'error'));
+            }
+        });
+
+        // Theme Toggle
+        let isDark = false;
+        const themeBtn = document.getElementById('themeToggleBtn');
+        function applyTheme(dark) {
+            if (dark) {
+                document.body.classList.add('dark-theme');
+                themeBtn.innerHTML = '☀️ Light';
+                themeBtn.classList.remove('bg-gray-100', 'hover:bg-gray-200');
+                themeBtn.classList.add('bg-gray-800', 'hover:bg-gray-700', 'text-white');
+                localStorage.setItem('paytmTheme', 'dark');
+            } else {
+                document.body.classList.remove('dark-theme');
+                themeBtn.innerHTML = '🌙 Dark';
+                themeBtn.classList.remove('bg-gray-800', 'hover:bg-gray-700', 'text-white');
+                themeBtn.classList.add('bg-gray-100', 'hover:bg-gray-200');
+                localStorage.setItem('paytmTheme', 'light');
+            }
+            isDark = dark;
+        }
+        const savedTheme = localStorage.getItem('paytmTheme');
+        applyTheme(savedTheme === 'dark');
+        themeBtn.addEventListener('click', () => applyTheme(!isDark));
+
+        // Attach input listeners
+        const inputs = [elements.editAmount, elements.editAmountWords, elements.editToName, elements.editToBank, elements.editFromName, elements.editFromBank, elements.editUpiRef, elements.editDateTime];
+        inputs.forEach(inp => inp.addEventListener('input', handleInputChange));
+        document.getElementById('resetDefaultBtn').addEventListener('click', resetToDefault);
+        document.getElementById('saveToHistoryBtn').addEventListener('click', saveCurrentToHistory);
+        document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
+        
+        // Initialize
+        const defaultDateTime = '2024-02-19T19:16';
+        elements.editDateTime.value = defaultDateTime;
+        handleInputChange();
+        loadHistory();
+    </script>
+</body>
+</html>
